@@ -59,7 +59,7 @@ def main():
     cfg.MODEL.WEIGHTS = "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"
     cfg.SOLVER.IMS_PER_BATCH = 2
     cfg.SOLVER.BASE_LR = 1e-4
-    cfg.SOLVER.MAX_ITER = 300
+    cfg.SOLVER.MAX_ITER = 1979
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 32 
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
     cfg.TEST.EVAL_PERIOD=100
