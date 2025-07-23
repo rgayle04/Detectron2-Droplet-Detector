@@ -18,7 +18,7 @@ Dataset Registry/Training:
 python dataset_register.py "path to csv" "path to images" "output json path" 
 [if cv2 shows up hit esc otherwise training may not go through] 
 Eg. python dataset_register.py "D:\Training Data\base\fr\master.csv" "D:\Training Data\base\fr" "D:\Training Data\base\detectron2-output\annotations.json"
-
+[To modify number of epochs use equation epoch = (max_iter * batch_size)/total # of images]
 
 Detectron2 Prediction:
 
