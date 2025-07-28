@@ -1,6 +1,5 @@
 import cv2
 import os
-#import imageio
 import numpy as np
 import sys
 import torch
@@ -22,6 +21,7 @@ from utils import getModelInput, processframe, getcb2cImg, getBoundingSquare
 
 # --- Detectron2 Setup ---
 cfg = get_cfg()
+cfg.OUTPUT_DIR = "./output/exp_droplets_r50"
 cfg.merge_from_file(model_zoo.get_config_file('./COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml')) #may need  to be changed for other users
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
 cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -171,7 +171,8 @@ def draw_fixed_color_instances(frame, instances, colors):
         #   continue
         droplet_circles.append((cx, cy, cr))
 
-        droplet_circles = sorted(droplet_circles, key=lambda c: c[0]) #stops issue of circles being "swapped"
+        droplet_circles = sorted(droplet_circles, key=lambda c: c[0]) #stops issue of circles being "swapped" marks left most as droplet 1 and rightmost as droplet 2 
+        #There may still be some issues with this but they are being gradually resolved, actual tracking maybe?
 
         #print(f'Droplet circles: {droplet_circles}')
     for i in range(len(droplet_circles)-1):
