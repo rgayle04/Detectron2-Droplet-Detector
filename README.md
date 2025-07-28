@@ -26,12 +26,14 @@ python dataset_register.py "path to csv" "path to images" "output json path"
 
 
 Eg. python dataset_register.py "D:\Training Data\base\fr\master.csv" "D:\Training Data\base\fr" "D:\Training Data\base\detectron2-output\annotations.json"
+
 [To modify number of epochs use equation epoch = (max_iter * batch_size)/total # of images]
 
 #
 Detectron2 Prediction:
 
 python infer_trained_model.py "path to input video" "path to output directory" "number of frames to skip(optional)"
+
 Eg. python infer_trained_model.py "D:\Training Data\Droplet Videos\WP 30C DSC 1 to 1 to 0.2 SQE 0.01mg SER 189mOsm012.mp4" "D:\Training Data\base\detectron2-output" 10
 
 Progress on a file to visualize the results from the csv is being made
