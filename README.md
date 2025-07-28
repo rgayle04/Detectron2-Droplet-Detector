@@ -4,10 +4,15 @@ detectron2- env set up:
 
 #
   1: Download attached yaml file in repo
+  
   2: conda env create -f detectron2-env.yaml
+  
   3: conda activate detectron2
+  
   4: pip uninstall torch torchvision torchaudio
+  
   5: pip install torch==1.12.0+cu113 torchvision==0.13.0+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
+  
   6: conda install -c conda-forge opencv
     -pip install pandas
     -pip install numpy 
@@ -18,7 +23,8 @@ detectron2- env set up:
 #
 Dataset Registry/Training: 
 python dataset_register.py "path to csv" "path to images" "output json path" 
-[if cv2 shows up hit esc otherwise training may not go through] 
+
+
 Eg. python dataset_register.py "D:\Training Data\base\fr\master.csv" "D:\Training Data\base\fr" "D:\Training Data\base\detectron2-output\annotations.json"
 [To modify number of epochs use equation epoch = (max_iter * batch_size)/total # of images]
 
