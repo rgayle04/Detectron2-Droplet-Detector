@@ -1,6 +1,8 @@
 # Detectron2-Water-Droplet-Detector
 
 detectron2- env set up:
+
+#
 1: Download attached yaml file in repo
 2: conda env create -f detectron2-env.yaml
 3: conda activate detectron2
@@ -13,7 +15,7 @@ detectron2- env set up:
   (There maybe be more depencies missing to use the detector) 
 
 
-
+#
 Dataset Registry/Training: 
 python dataset_register.py "path to csv" "path to images" "output json path" 
 [if cv2 shows up hit esc otherwise training may not go through] 
