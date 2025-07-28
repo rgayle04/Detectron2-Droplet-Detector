@@ -17,7 +17,7 @@ detectron2- env set up:
     -pip install pandas
     -pip install numpy 
     -pip install opencv-python
-    (There maybe be more depencies missing to use the detector) 
+    (There maybe be more dependencies missing to use the detector) 
 
 
 #
