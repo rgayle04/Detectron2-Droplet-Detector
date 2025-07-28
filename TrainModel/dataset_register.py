@@ -47,18 +47,20 @@ def main():
     cfg.DATASETS.TEST = (val_name,)
     cfg.DATALOADER.NUM_WORKERS = 2
     cfg.MODEL.WEIGHTS = "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"
-    cfg.SOLVER.WARMUP_ITERS = 500
+    cfg.SOLVER.WARMUP_ITERS = 50
     cfg.SOLVER.GAMMA = 0.05
-    cfg.SOLVER.STEPS = (3000, 7000)
+    cfg.SOLVER.STEPS = (594, 1385)
     cfg.SOLVER.IMS_PER_BATCH = 16
     cfg.SOLVER.BASE_LR = 1e-4
-    cfg.SOLVER.MAX_ITER = 10000
+    cfg.SOLVER.MAX_ITER = 1979
     cfg.SOLVER.AMP.ENABLED = True
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 16
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 32
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
     cfg.TEST.EVAL_PERIOD = 100
     cfg.OUTPUT_DIR = "./output/exp_droplets_r50"
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+    evaluator = COCOEvaluator(val_name, cfg, False, output_dir=cfg.OUTPUT_DIR)
 
     # Train
     trainer = DefaultTrainer(cfg)
@@ -66,7 +68,7 @@ def main():
     trainer.train()
 
     # Evaluate
-    evaluator = COCOEvaluator(val_name, cfg, False, output_dir=cfg.OUTPUT_DIR)
+    
     val_loader = build_detection_test_loader(cfg, val_name)
     print(inference_on_dataset(trainer.model, val_loader, evaluator))
 
