@@ -1,5 +1,7 @@
 import cv2
 import os
+import glob
+#import imageio
 import numpy as np
 import sys
 import torch
@@ -175,36 +177,38 @@ def draw_fixed_color_instances(frame, instances, colors):
         #There may still be some issues with this but they are being gradually resolved, actual tracking maybe?
 
         #print(f'Droplet circles: {droplet_circles}')
-    for i in range(len(droplet_circles)-1):
+    if len(droplet_circles) == 2:   
+        for i in range(len(droplet_circles)-1):
 
-        c1 = list(map(lambda x: int(x), droplet_circles[i]))
-        c2 = list(map(lambda x: int(x), droplet_circles[i+1]))
-        
-        #comment out here or in frame processing for debugging 
-        #print(f'Circle 1: {c1}')
-        #print(f'Circle 2: {c2}')
+            c1 = list(map(lambda x: int(x), droplet_circles[i]))
+            c2 = list(map(lambda x: int(x), droplet_circles[i+1]))
+            
+            #comment out here or in frame processing for debugging 
+            #print(f'Circle 1: {c1}')
+            #print(f'Circle 2: {c2}')
 
-        result = processframe(c1, c2)
-        #also ensures the cx, cy and cr are accurate to the actual droplets 
-        cv2.circle(frame_drawn, (c1[0],c1[1]), c1[2], (0, 255, 0 ), 2)
-        cv2.circle(frame_drawn, (c2[0],c2[1]), c2[2], (0, 255, 0), 2)
+            result = processframe(c1, c2)
+            #also ensures the cx, cy and cr are accurate to the actual droplets 
+            cv2.circle(frame_drawn, (c1[0],c1[1]), c1[2], (0, 255, 0 ), 2)
+            cv2.circle(frame_drawn, (c2[0],c2[1]), c2[2], (0, 255, 0), 2)
 
 
-        droplet_circles.clear() #prevents repetition of data in loop  
-        if result is not None: 
-            r1, v1, r2, v2, tv, rdib, theta_deg, lr = result
-            timestamp = float(g_currentframe)/fps
-            outfile.write(f'{timestamp},{r1},{v1},{r2},{v2},{tv},{rdib},{theta_deg},{lr}\n')
-            outfile.flush()
-        else:
-            print(f'[Warning] No result from processframe() for frame {g_currentframe}')
-
+            droplet_circles.clear() #prevents repetition of data in loop  
+            if result is not None: 
+                r1, v1, r2, v2, tv, rdib, theta_deg, lr = result
+                timestamp = float(g_currentframe)/fps
+                outfile.write(f'{timestamp},{r1},{v1},{r2},{v2},{tv},{rdib},{theta_deg},{lr}\n')
+                outfile.flush()
+            else:
+                print(f'[Warning] No result from processframe() for frame {g_currentframe}')
+    else:
+        print(f'[Warning] Not enough droplets to process for frame {g_currentframe}: {len(droplet_circles)}')
 
     return frame_drawn
 
 frame_size=(800,800)
 vid = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 20, frame_size)
-fixed_colors = [(255, 0, 0), (255, 0, 0)]  # Blue and Green for first two droplets (keeping both as blue for now)
+fixed_colors = [(255, 0, 0), (0, 255, 0)]  # Blue and Green for first two droplets (keeping both as blue for now)
 
 print(f'Reading {vpath} video')
 
