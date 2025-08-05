@@ -208,7 +208,7 @@ def draw_fixed_color_instances(frame, instances, colors):
 
 frame_size=(800,800)
 vid = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 20, frame_size)
-fixed_colors = [(255, 0, 0), (0, 255, 0)]  # Blue and Green for first two droplets (keeping both as blue for now)
+fixed_colors = [(255, 0, 0), (255,0, 0)]  # Blue and Green for first two droplets (keeping both as blue for now)
 
 print(f'Reading {vpath} video')
 
@@ -258,3 +258,4 @@ cv2.destroyAllWindows()
 
 
    '''
+
