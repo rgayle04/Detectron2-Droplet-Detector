@@ -44,3 +44,10 @@ Eg. python infer_trained_model.py "D:\Training Data\Droplet Videos\WP 30C DSC 1 
 
 Progress on a file to visualize the results from the csv is being made
 
+#
+## Video Stitcher:
+python stitcher.py "path to directory 1" "path to directory 2" "output directory"
+
+Eg. python stitcher.py "E:\Training Data\base\output\output2" "E:\Training Data\base\detectron2-output" "E:\Training Data\base\testing output"
+
+
