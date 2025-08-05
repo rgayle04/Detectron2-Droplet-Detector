@@ -37,8 +37,8 @@ if os.path.isdir(vpath1) and os.path.isdir(vpath2):
         invideopaths1.extend(glob.glob(os.path.join(vpath1, ext)))
         invideopaths2.extend(glob.glob(os.path.join(vpath2, ext)))
 
-    #print("Videos from Dir 1:", invideopaths1)
-    #print("Videos from Dir 2:", invideopaths2)
+    print("Videos from Dir 1:", invideopaths1)
+    print("Videos from Dir 2:", invideopaths2)
 
     for path1 in invideopaths1:
         name1 = Path(path1).stem
@@ -86,5 +86,4 @@ else:
     '''
     #Source of frame stitching code 
     https://karobben.github.io/2021/04/10/Python/opencv-v-paste/
-
     '''
