@@ -70,10 +70,6 @@ if os.path.isdir(vpath1) and os.path.isdir(vpath2):
 
                     vid.write(combined)
 
-                    # Optional: display
-                    # cv2.imshow("Combined", combined)
-                    # if cv2.waitKey(1) & 0xFF == 27:
-                    #     break
 
                 cap1.release()
                 cap2.release()
@@ -81,10 +77,42 @@ if os.path.isdir(vpath1) and os.path.isdir(vpath2):
                 print(f"Saved: {output_path}")
 
 else:
-    print("One or both input directories are invalid.")
+    name1 = Path(vpath1).stem
+    name2 = Path(vpath2).stem
+    if name1 == name2:
+        print(f"Stitching {name2}...")
+        cap1 = cv2.VideoCapture(vpath1)
+        cap2 = cv2.VideoCapture(vpath2)
+
+        if not cap1.isOpened() or not cap2.isOpened():
+                print(f"Failed to open one of the videos: {name1}")
+                exit()
+
+        output_path = os.path.join(opath, name1 + '_stitched.avi')
+        vid = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'XVID'), 20, (frame_width * 2, frame_height))
+
+        while True:
+            ret1, frame1 = cap1.read()
+            ret2, frame2 = cap2.read()
+
+            if not ret1 or not ret2 or frame1 is None or frame2 is None:
+                break
+
+            combined = Fram_connect(frame1, frame2, frame_height, frame_width)
+            if combined is None:
+                break
+
+            vid.write(combined)
+
+        cap1.release()
+        cap2.release()
+        vid.release()
+        print(f"Saved: {output_path}")
+    else: 
+        print(f"[WARNING]: Input video paths do not share same name")
+
 
     '''
     #Source of frame stitching code 
     https://karobben.github.io/2021/04/10/Python/opencv-v-paste/
     '''
-
