@@ -110,9 +110,3 @@ else:
         print(f"Saved: {output_path}")
     else: 
         print(f"[WARNING]: Input video paths do not share same name")
-
-
-    '''
-    #Source of frame stitching code 
-    https://karobben.github.io/2021/04/10/Python/opencv-v-paste/
-    '''
