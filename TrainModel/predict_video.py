@@ -1,5 +1,7 @@
 import cv2
+import math
 import os
+import pandas as pd
 import glob
 import numpy as np
 import sys
@@ -7,6 +9,7 @@ import torch
 from pathlib import Path
 from detectron2.utils.visualizer import ColorMode
 from detectron2.utils.video_visualizer import VideoVisualizer
+#from deep-sort-realtime.deepsort_tracker import DeepSort
 from detectron2.data import MetadataCatalog
 from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
@@ -25,6 +28,10 @@ cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
 cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 cfg.TEST.EVAL_PERIOD = 100
 predictor = DefaultPredictor(cfg)
+
+#tracker = DeepSort(max_age=30, n_init=3, max_iou_distance=0.7, max_cosine_distance=0.3)
+
+#droplet_history={}
 
 MetadataCatalog.get('droplets_train').thing_classes = ['droplet']
 MetadataCatalog.get('droplets_train').thing_colors = [(0, 255, 0)]
@@ -124,7 +131,7 @@ def process_video(video_path, output_dir, frameskip=1):
 
     print(f"{name} video")
     print(f"video out: {output_video_path}")
-    print(f"csv out: {csv_path}")
+    print(f"csv out: {csv_path}\n")
 
     vid = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 20, frame_size)
     with open(csv_path, 'w') as outfile:
@@ -153,8 +160,34 @@ def process_video(video_path, output_dir, frameskip=1):
             if cv2.waitKey(1) == 27:
                 print("Interrupted by user.")
                 break
-
             g_currentframe += 1
+    
+    df = pd.read_csv(csv_path)
+
+    abs_val = df.loc[1, 'Time Stamp']
+    df['Adjusted Time'] = (df['Time Stamp']-abs_val)
+
+    orgcon = ""
+    for char in range(len(name)):
+        if char.isdigit():
+            orgcon+=char
+    print(int(orgcon))   
+    
+    #df['Org Concentr']
+
+    abs_val = df.loc[1, 'Droplet 1 Volume']
+    
+    df['(V/V0)^2']= (df['Droplet 1 Volume']/abs_val)**2
+
+    df['Init Radius'] = (df.loc[1,'Droplet 1 Radius']/10000)
+
+    df['Init Vol'] = (4/3)*3.1415*(df['Init Radius']**3)
+
+    df['DIB Area'] = math.pi*(df['DIB Radius']**2)
+    
+#    df['Permeability']= df['Init Radius'] * df['DIB Rad cm']/(df['DIB area']*0.018 *0.192)
+
+    df.to_csv(csv_path, index=False)
 
     cap.release()
     vid.release()
@@ -188,5 +221,3 @@ if __name__ == "__main__":
 
 
    '''
-
-
