@@ -167,11 +167,11 @@ def process_video(video_path, output_dir, frameskip=1):
     abs_val = df.loc[1, 'Time Stamp']
     df['Adjusted Time'] = (df['Time Stamp']-abs_val)
 
-    orgcon = ""
-    for char in range(len(name)):
-        if char.isdigit():
-            orgcon+=char
-    print(int(orgcon))   
+    #orgcon = ""
+    #for char in range(len(name)):
+    #    if char.isdigit():
+    #        orgcon+=char
+    #print(int(orgcon))   
     
     #df['Org Concentr']
 
@@ -221,3 +221,4 @@ if __name__ == "__main__":
 
 
    '''
+
