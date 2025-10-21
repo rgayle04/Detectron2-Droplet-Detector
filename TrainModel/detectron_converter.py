@@ -35,6 +35,9 @@ def convert_circle_csv_to_detectron2(csv_path, image_root):
     for idx, row in df.iterrows():
         file_path = os.path.join(image_root, row["file_name"])
         img = cv2.imread(file_path)
+        if img is None:
+            continue
+            
         height, width = img.shape[:2]
 
         annotations = []
@@ -80,11 +83,11 @@ def save_detectron2_dataset(dataset_dicts, output_path):
 
 
 
-csv_path = sys.argv[1]  # Path to the input CSV file
-image_root = sys.argv[2]  # Path to the directory containing images
+mastercsv_path = sys.argv[1]  # Path to the input master CSV file
+image_root = sys.argv[2]  # Path to the directory containing images (use bounding boxes instead )
 output_json_path = sys.argv[3]  # Path to save the output JSON file
 
-dataset_dicts = convert_circle_csv_to_detectron2(csv_path, image_root)
+dataset_dicts = convert_circle_csv_to_detectron2(mastercsv_path, image_root)
 
 print(f"[INFO] Converted {len(dataset_dicts)} images to Detectron2 format.")
 
