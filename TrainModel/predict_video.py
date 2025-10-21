@@ -1,12 +1,15 @@
 import cv2
 import math
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pandas as pd
 import glob
 import numpy as np
 import sys
+import scipy.stats as stats
 import torch
 from pathlib import Path
+from sklearn.linear_model import LinearRegression 
 from detectron2.utils.visualizer import ColorMode
 from detectron2.utils.video_visualizer import VideoVisualizer
 #from deep-sort-realtime.deepsort_tracker import DeepSort
@@ -164,30 +167,92 @@ def process_video(video_path, output_dir, frameskip=1):
     
     df = pd.read_csv(csv_path)
 
-    abs_val = df.loc[1, 'Time Stamp']
-    df['Adjusted Time'] = (df['Time Stamp']-abs_val)
+    if df.empty:
+        return
+    else:
+        df['Adjusted Time'] = (df['Time Stamp']-df.loc[0, 'Time Stamp'])
 
-    #orgcon = ""
-    #for char in range(len(name)):
-    #    if char.isdigit():
-    #        orgcon+=char
-    #print(int(orgcon))   
-    
-    #df['Org Concentr']
+        split_name = name.split(" ")
+        
+        sp_name = split_name[-1]
 
-    abs_val = df.loc[1, 'Droplet 1 Volume']
-    
-    df['(V/V0)^2']= (df['Droplet 1 Volume']/abs_val)**2
+        osmP = ""
 
-    df['Init Radius'] = (df.loc[1,'Droplet 1 Radius']/10000)
+        for i in range(3):
+            if len(osmP)<3:
+                osmP+=sp_name[i]
+        print(int(osmP))
+        
+        osmP = float(osmP)/1000
 
-    df['Init Vol'] = (4/3)*3.1415*(df['Init Radius']**3)
+        df['Org. Concentr'] = None
 
-    df['DIB Area'] = math.pi*(df['DIB Radius']**2)
-    
-#    df['Permeability']= df['Init Radius'] * df['DIB Rad cm']/(df['DIB area']*0.018 *0.192)
+        df.at[0, 'Org. Concentr'] = osmP
 
-    df.to_csv(csv_path, index=False)
+        av = df.loc[0, 'Droplet 1 Volume']
+        
+        df['(V/V0)^2']= (df['Droplet 1 Volume']/av)**2
+
+        df['Init Radius'] = None
+        df.at[0, 'Init Radius'] = (df.loc[0,'Droplet 1 Radius']/10000)
+
+        f = (df.loc[1,'Droplet 1 Radius']/10000) 
+
+        df['Init Vol'] = None
+        df.at[0, 'Init Vol'] = (4/3)*3.1415*(df.loc[0,'Init Radius']**3)
+
+        df['DIB Area'] =  math.pi*(df.loc[0,'DIB Radius']**2)
+
+        df['Linearized DIB Radius'] = None
+        slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['DIB Radius'])
+
+        df.at[0, 'Linearized DIB Radius'] = intercept
+
+        df['DIB Radius(cm)'] = None
+        df.at[0, 'DIB Radius(cm)'] = intercept/10000
+
+        df['DIB Area(cm^2)'] = None
+        df.at[0, 'DIB Area(cm^2)'] = math.pi*(df.loc[0,'DIB Radius(cm)']**2)
+
+        slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['(V/V0)^2'])
+        
+        df['slope (V/V0)^2'] = None
+        df.at[0, 'slope (V/V0)^2'] = slope
+
+        df['r^2'] = None
+        df.at[0, 'r^2'] = intercept
+        df['Permeability (avg DIB Rad)'] = None 
+
+        df.at[0, 'Permeability (avg DIB Rad)'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*df.loc[0,'Org. Concentr'])
+
+
+        
+        #df.at[0, 'Permeability'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*(df.loc[0, 'Org. Concentr']))
+
+
+        X_poly = np.vstack([df['Adjusted Time']**1, df['Adjusted Time']**2, df['Adjusted Time']**3]).T
+        model = LinearRegression()
+        model.fit(X_poly, df['DIB Area'])
+        coefficients = model.coef_
+        intercept = model.intercept_
+
+        a = coefficients.tolist() 
+        df['A'] = None
+        df.at[0, 'A'] = a[0]
+        df['B'] = None
+        df.at[0, 'B'] = a[1]
+        df['C'] = None
+        df.at[0, 'C'] = a[2]
+        df['D'] = None
+        df.at[0, 'D'] = intercept 
+        df['Eval']=((0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'A']*df['Adjusted Time']**4)/(2*df.loc[0, 'Droplet 1 Volume'])+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'B']*df['Adjusted Time']**3)/(3*df.loc[0,'Droplet 1 Volume'])+(0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'C']*df['Adjusted Time']**2)/df.loc[0,'Droplet 1 Volume']+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'D']*df['Adjusted Time'])/df.loc[0,'Droplet 1 Volume'])
+
+        slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
+        df['Permeability (slope)']= None
+        df.at[0, 'Permeability (slope)'] = slope
+
+        df.to_csv(csv_path, index=False)
+        
 
     cap.release()
     vid.release()
@@ -221,4 +286,3 @@ if __name__ == "__main__":
 
 
    '''
-
