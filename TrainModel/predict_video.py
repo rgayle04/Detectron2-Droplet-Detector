@@ -170,7 +170,18 @@ def process_video(video_path, output_dir, frameskip=1):
     if df.empty:
         return
     else:
-        df['Adjusted Time'] = (df['Time Stamp']-df.loc[0, 'Time Stamp'])
+
+        std = df['DIB Radius'].std()
+        print('DIB Rad Standard Deviation:', std)
+        mean = df['DIB Radius'].mean()
+        print('DIB Rad Mean:', mean)
+
+        uL = mean + (std*2) 
+        lL = mean - (std*2)
+
+        outliers = np.where((df['DIB Radius']> uL) & (df['DIB Radius'] < lL))
+        
+        df.drop(outliers[0], axis=0, inplace=True)
 
         split_name = name.split(" ")
         
@@ -181,7 +192,7 @@ def process_video(video_path, output_dir, frameskip=1):
         for i in range(3):
             if len(osmP)<3:
                 osmP+=sp_name[i]
-        print(int(osmP))
+        #print(int(osmP))
         
         osmP = float(osmP)/1000
 
@@ -189,9 +200,15 @@ def process_video(video_path, output_dir, frameskip=1):
 
         df.at[0, 'Org. Concentr'] = osmP
 
+        df['Adjusted Time'] = (df['Time Stamp']-df.loc[0, 'Time Stamp'])
+
+        df['DIB Area'] =  math.pi*(df.loc[0,'DIB Radius']**2)
+        
         av = df.loc[0, 'Droplet 1 Volume']
         
         df['(V/V0)^2']= (df['Droplet 1 Volume']/av)**2
+
+        df['Linear Permebility Section:'] = None 
 
         df['Init Radius'] = None
         df.at[0, 'Init Radius'] = (df.loc[0,'Droplet 1 Radius']/10000)
@@ -200,8 +217,6 @@ def process_video(video_path, output_dir, frameskip=1):
 
         df['Init Vol'] = None
         df.at[0, 'Init Vol'] = (4/3)*3.1415*(df.loc[0,'Init Radius']**3)
-
-        df['DIB Area'] =  math.pi*(df.loc[0,'DIB Radius']**2)
 
         df['Linearized DIB Radius'] = None
         slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['DIB Radius'])
@@ -221,14 +236,12 @@ def process_video(video_path, output_dir, frameskip=1):
 
         df['r^2'] = None
         df.at[0, 'r^2'] = intercept
+
         df['Permeability (avg DIB Rad)'] = None 
 
-        df.at[0, 'Permeability (avg DIB Rad)'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*df.loc[0,'Org. Concentr'])
+        df.at[0, 'Permeability (avg DIB Rad)'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*df.loc[0,'Org. Concentr'])*2
 
-
-        
-        #df.at[0, 'Permeability'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*(df.loc[0, 'Org. Concentr']))
-
+        df['3rd Degree Polynomial Section:'] = None
 
         X_poly = np.vstack([df['Adjusted Time']**1, df['Adjusted Time']**2, df['Adjusted Time']**3]).T
         model = LinearRegression()
@@ -247,9 +260,16 @@ def process_video(video_path, output_dir, frameskip=1):
         df.at[0, 'D'] = intercept 
         df['Eval']=((0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'A']*df['Adjusted Time']**4)/(2*df.loc[0, 'Droplet 1 Volume'])+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'B']*df['Adjusted Time']**3)/(3*df.loc[0,'Droplet 1 Volume'])+(0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'C']*df['Adjusted Time']**2)/df.loc[0,'Droplet 1 Volume']+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'D']*df['Adjusted Time'])/df.loc[0,'Droplet 1 Volume'])
 
+        
+        #df.at[0, 'Permeability'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*(df.loc[0, 'Org. Concentr']))
+
+        
         slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
         df['Permeability (slope)']= None
         df.at[0, 'Permeability (slope)'] = slope
+
+        df['Permeability (intercept)'] = None
+        df.at[0, 'Permeability (intercept)'] = intercept
 
         df.to_csv(csv_path, index=False)
         
