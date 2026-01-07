@@ -43,7 +43,7 @@ def analyze(csv_path, opath):
     
     with open(output, 'a', newline='') as outfile:
         if header:
-            outfile.write('Video Name,Linear Permeability,3rd Deg Permeability,Linear Std,3rd Deg Poly Std\n')
+            outfile.write('Video Name,Linear Permeability,3rd Deg Permeability,Linear Std,3rd Deg Poly Std, File Count\n')
 
         # Process each group
         for group_name, file_list in sorted(grouped_files.items()):
@@ -63,13 +63,13 @@ def analyze(csv_path, opath):
                 outfile.write(f'{name}, {linear},{poly}\n')
                 i+=1
                 
-
+           if len(file_list) > 1:
             # Calculate mean and standard deviation
-            linear_mean = np.mean(linear_values)
-            linear_std = np.std(linear_values)
-            poly_mean = np.mean(poly_values)
-            poly_std = np.std(poly_values)
-            file_count = len(file_list)
+                linear_mean = np.mean(linear_values)
+                linear_std = np.std(linear_values, ddof= 1)
+                poly_mean = np.mean(poly_values)
+                poly_std = np.std(poly_values, ddof= 1)
+                file_count = len(file_list))
             
             outfile.write(f'{group_name},{linear_mean},{poly_mean},{linear_std},{poly_std},{file_count}\n')
             if i == len(file_list):
@@ -83,5 +83,6 @@ def main(csv_path, opath):
 if __name__ == "__main__":
     csv_path = sys.argv[1]
     opath = sys.argv[2]
+
 
     main(csv_path, opath)
