@@ -179,9 +179,9 @@ def process_video(video_path, output_dir, frameskip=1):
         uL = mean + (std*2) 
         lL = mean - (std*2)
 
-        outliers = np.where((df['DIB Radius']> uL) & (df['DIB Radius'] < lL))
+        df = df[(df['DIB Radius']>= lL) & (df['DIB Radius'] <= uL)]
         
-        df.drop(outliers[0], axis=0, inplace=True)
+        #df.drop(outliers[0], axis=0, inplace=True)
 
         split_name = name.split(" ")
         
