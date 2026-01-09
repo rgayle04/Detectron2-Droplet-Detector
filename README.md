@@ -49,6 +49,14 @@ Eg. python predict_video.py "D:\Training Data\Droplet Videos\WP 30C DSC 1 to 1 t
 Progress on a file to visualize the results from the csv is being made
 
 #
+## Data Analyzer:
+accepts directory of csv files output by the prediction model and will group csvs by names and then create a summarized csv with the mean of the permeability for the files and their standard deviation 
+
+python data_analyzer.py "path to csv file directory" "path to output directory"
+
+Eg. python data_analyzer.py "D:\Training Data\Droplet Videos\12-11-25\output" "D:\Training Data\Droplet Videos\12-11-25\output"
+
+#
 ## Video Stitcher:
 simply will take two videos with matching stem names and will stitch them together for side by side, frame to frame comparison 
 
