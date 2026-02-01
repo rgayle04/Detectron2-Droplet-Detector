@@ -2,6 +2,7 @@ import cv2
 import math
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+from numpy.polynomial import polynomial as P 
 import pandas as pd
 import glob
 import numpy as np
@@ -82,6 +83,12 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
     for i, box in enumerate(boxes):
+        #x1, y1, x2, y2 = box.cpu().numpy().astype(int)
+        #roi = image[y1:y2, x1:x2]
+        #gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        #circles = cv2.HoughCircles(gray_roi, cv2.HOUGH_GRADIENT, )
+
         x1, y1, x2, y2 = getBoundingSquare(box, h, w)
         mask = pred_masks[i].astype('uint8')
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -111,6 +118,9 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
         #also ensures the cx, cy and cr are accurate to the actual droplet
         cv2.circle(frame_drawn, (c1[0], c1[1]), c1[2], (0, 255, 0), 2)
         cv2.circle(frame_drawn, (c2[0], c2[1]), c2[2], (0, 255, 0), 2)
+
+        cv2.circle(frame_drawn, (c1[0], c1[1]), 2, (0, 0, 255), 2)
+        cv2.circle(frame_drawn, (c2[0], c2[1]), 2, (0, 0, 255), 2)
 
         if result is not None:
             r1, v1, r2, v2, tv, rdib, theta_deg, lr = result
@@ -171,17 +181,24 @@ def process_video(video_path, output_dir, frameskip=1):
         return
     else:
 
-        std = df['DIB Radius'].std()
+        std = np.std(df['DIB Radius'], ddof= 1)
         print('DIB Rad Standard Deviation:', std)
         mean = df['DIB Radius'].mean()
         print('DIB Rad Mean:', mean)
 
-        uL = mean + (std*2) 
-        lL = mean - (std*2)
-
-        df = df[(df['DIB Radius']>= lL) & (df['DIB Radius'] <= uL)]
+        uL = mean + (std*3) 
+        print(f'Upper Limit: {uL}') 
         
+        lL = mean - (std*3)
+        print(f'Lower Limit: {lL}')
+        #df = df[df['DIB Radius'].notna()]
+
+        df.dropna(subset=['DIB Radius'], inplace=True)  # Remove NaN rows first
+
+        outliers = np.where((df['DIB Radius'] > uL) | (df['DIB Radius'] < lL))
+        print(f'Number of Outliers: {len(outliers[0])}')
         #df.drop(outliers[0], axis=0, inplace=True)
+        print(f'Rows remaining after cleaning: {len(df)}')
 
         split_name = name.split(" ")
         
@@ -213,7 +230,7 @@ def process_video(video_path, output_dir, frameskip=1):
         df['Init Radius'] = None
         df.at[0, 'Init Radius'] = (df.loc[0,'Droplet 1 Radius']/10000)
 
-        f = (df.loc[1,'Droplet 1 Radius']/10000) 
+        #f = (df.loc[1,'Droplet 1 Radius']/10000) 
 
         df['Init Vol'] = None
         df.at[0, 'Init Vol'] = (4/3)*3.1415*(df.loc[0,'Init Radius']**3)
@@ -231,40 +248,65 @@ def process_video(video_path, output_dir, frameskip=1):
 
         slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['(V/V0)^2'])
         
-        df['slope (V/V0)^2'] = None
-        df.at[0, 'slope (V/V0)^2'] = slope
+        summary_cols = {
+        'slope (V/V0)^2': slope,
+        'r^2': intercept,
+        'Permeability (avg DIB Rad)': ((slope/2) * df.loc[0, 'DIB Radius(cm)']) / (df.loc[0, 'DIB Area(cm^2)'] * 0.018 * df.loc[0, 'Org. Concentr']) * 2,
+        '3rd Degree Polynomial Section:': None
+        }
 
-        df['r^2'] = None
-        df.at[0, 'r^2'] = intercept
+        # Only set these at row 0
+        for col, val in summary_cols.items():
+            if col not in df.columns:
+                df[col] = np.nan  # Use NaN instead of None
+            df.at[0, col] = val
 
-        df['Permeability (avg DIB Rad)'] = None 
+        x = df['Adjusted Time'].dropna().values
 
-        df.at[0, 'Permeability (avg DIB Rad)'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*df.loc[0,'Org. Concentr'])*2
+        y = df['DIB Area'].dropna().values
 
-        df['3rd Degree Polynomial Section:'] = None
+        min_len = min(len(x), len(y))
 
-        X_poly = np.vstack([df['Adjusted Time']**1, df['Adjusted Time']**2, df['Adjusted Time']**3]).T
-        model = LinearRegression()
-        model.fit(X_poly, df['DIB Area'])
-        coefficients = model.coef_
-        intercept = model.intercept_
+        x = x[:min_len]
+        y = y[:min_len]
 
-        a = coefficients.tolist() 
+        coeffs = P.polyfit(x,y,3)
+
+
+        #X = np.column_stack([x**1, x**2, x**3])
+
+        #X_with_intercept = np.column_stack([np.ones(len(x)), X])
+
+        #coefficients = np.linalg.lstsq(X_with_intercept, y, rcond=None)[0]
+
+        
+#        coefficients = np.polyfit(x,y,3)
+#        a3, a2, a1, a0 = coefficients
+
+        #a = coefficients.tolist() 
         df['A'] = None
-        df.at[0, 'A'] = a[0]
+        df.at[0, 'A'] = coeffs[3]
         df['B'] = None
-        df.at[0, 'B'] = a[1]
+        df.at[0, 'B'] = coeffs[2]
         df['C'] = None
-        df.at[0, 'C'] = a[2]
+        df.at[0, 'C'] = coeffs[1]
         df['D'] = None
-        df.at[0, 'D'] = intercept 
+        df.at[0, 'D'] = coeffs[0] 
         df['Eval']=((0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'A']*df['Adjusted Time']**4)/(2*df.loc[0, 'Droplet 1 Volume'])+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'B']*df['Adjusted Time']**3)/(3*df.loc[0,'Droplet 1 Volume'])+(0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'C']*df['Adjusted Time']**2)/df.loc[0,'Droplet 1 Volume']+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'D']*df['Adjusted Time'])/df.loc[0,'Droplet 1 Volume'])
 
         
         #df.at[0, 'Permeability'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*(df.loc[0, 'Org. Concentr']))
 
         
-        slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
+        #slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
+        
+        x = df['Eval'].values
+        y = df['(V/V0)^2'].values
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        x = x[mask]
+        y = y[mask]
+        
+        slope, intercept = np.polyfit(x,y,1)
         df['Permeability (slope)']= None
         df.at[0, 'Permeability (slope)'] = slope
 
