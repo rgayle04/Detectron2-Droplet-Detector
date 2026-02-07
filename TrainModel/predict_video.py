@@ -196,10 +196,15 @@ def process_video(video_path, output_dir, frameskip=1):
         df.dropna(subset=['DIB Radius'], inplace=True)  # Remove NaN rows first
 
         outliers = np.where((df['DIB Radius'] > uL) | (df['DIB Radius'] < lL))
+        print(f'Rows before Cleaning: {len(df)}')
         print(f'Number of Outliers: {len(outliers[0])}')
-        #df.drop(outliers[0], axis=0, inplace=True)
-        print(f'Rows remaining after cleaning: {len(df)}')
 
+        if len(outliers[0]) < len(df) * 0.5:  # Don't remove more than 50%
+            df.drop(outliers[0], axis=0, inplace=True)
+            df.reset_index(drop=True, inplace=True)  # Reset index after dropping
+            print(f'Rows remaining: {len(df)}')
+        else:
+            print("Too many outliers detected - skipping removal")
         split_name = name.split(" ")
         
         sp_name = split_name[-1]
@@ -219,7 +224,7 @@ def process_video(video_path, output_dir, frameskip=1):
 
         df['Adjusted Time'] = (df['Time Stamp']-df.loc[0, 'Time Stamp'])
 
-        df['DIB Area'] =  math.pi*(df.loc[0,'DIB Radius']**2)
+        df['DIB Area'] =  math.pi*(df['DIB Radius']**2)
         
         av = df.loc[0, 'Droplet 1 Volume']
         
