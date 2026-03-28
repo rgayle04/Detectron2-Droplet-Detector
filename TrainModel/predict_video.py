@@ -18,8 +18,8 @@ from detectron2.data import MetadataCatalog
 from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
-
 from utils import getBoundingSquare, processframe  
+
 
 # ---------------- Detectron2 Setup ----------------
 
@@ -104,27 +104,40 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
 
     droplet_circles = sorted(droplet_circles, key=lambda c: c[0]) #stops issue of circles being "swapped" marks left most as droplet 1 and rightmost as droplet 2 
 
-    if len(droplet_circles) == 2:
+    #print(f'Length of Droplet Circles: {len(droplet_circles)}')
+
+    if len(droplet_circles) >= 1:
         c1 = list(map(int, droplet_circles[0]))
-        c2 = list(map(int, droplet_circles[1]))
-
-        #comment out here or in frame processing for debugging 
-        #print(f'Circle 1: {c1}')
-        #print(f'Circle 2: {c2}')
-
-
-        result = processframe(c1, c2)
-
-        #also ensures the cx, cy and cr are accurate to the actual droplet
+        
+        # Draw first circle
         cv2.circle(frame_drawn, (c1[0], c1[1]), c1[2], (0, 255, 0), 2)
-        cv2.circle(frame_drawn, (c2[0], c2[1]), c2[2], (0, 255, 0), 2)
-
         cv2.circle(frame_drawn, (c1[0], c1[1]), 2, (0, 0, 255), 2)
-        cv2.circle(frame_drawn, (c2[0], c2[1]), 2, (0, 0, 255), 2)
+        
+        if len(droplet_circles) == 1:
+            # Single droplet - pass only c1
+            result = processframe(c1)
+        elif len(droplet_circles) >= 2:
+            # Two droplets - pass both c1 and c2
+            c2 = list(map(int, droplet_circles[1]))
+            
+            # Draw second circle
+            cv2.circle(frame_drawn, (c2[0], c2[1]), c2[2], (0, 255, 0), 2)
+            cv2.circle(frame_drawn, (c2[0], c2[1]), 2, (0, 0, 255), 2)
+            
+            result = processframe(c1, c2)
 
+        # Write results - handle tuple unpacking
         if result is not None:
             r1, v1, r2, v2, tv, rdib, theta_deg, lr = result
             timestamp = float(g_currentframe) / fps
+            
+            # Convert None values to empty strings for CSV
+            #r2_str = r2 if r2 is not None else ''
+            #v2_str = v2 if v2 is not None else ''
+            #rdib_str = rdib if rdib is not None else ''
+            #theta_str = theta_deg if theta_deg is not None else ''
+            #lr_str = lr if lr is not None else ''
+
             outfile.write(f'{timestamp},{r1},{v1},{r2},{v2},{tv},{rdib},{theta_deg},{lr}\n')
 
     return frame_drawn
@@ -179,12 +192,22 @@ def process_video(video_path, output_dir, frameskip=1):
 
     if df.empty:
         return
+    has2Droplets = df['DIB Radius'].notna().any()
+
+    if not has2Droplets:
+        print("Single droplet detected throughout video. Skipping permeability analysis.\n")
+        #print("Basic measurements saved to CSV.\n")
+        cap.release()
+        vid.release()
+        cv2.destroyAllWindows()
+        return
     else:
+        print("Two Droplets detected. Performing Permeability Analysis: ")
 
         std = np.std(df['DIB Radius'], ddof= 1)
-        print('DIB Rad Standard Deviation:', std)
+        print('DIB Radius Standard Deviation:', std)
         mean = df['DIB Radius'].mean()
-        print('DIB Rad Mean:', mean)
+        print('DIB Radius Mean:', mean)
 
         uL = mean + (std*3) 
         print(f'Upper Limit: {uL}') 
