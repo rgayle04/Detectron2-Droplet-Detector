@@ -1,15 +1,10 @@
-import cv2
-import math
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pandas as pd
 import glob
 import numpy as np
 import sys
-import scipy.stats as stats
-import torch
-from pathlib import Path
-from sklearn.linear_model import LinearRegression 
+from pathlib import Path 
 from collections import defaultdict
 
 extensions = ['*.csv','*.xl','*.xlsx', '*.xlsm']
@@ -43,7 +38,7 @@ def analyze(csv_path, opath):
     
     with open(output, 'a', newline='') as outfile:
         if header:
-            outfile.write('Video Name,Linear Permeability,3rd Deg Permeability,Linear Std,3rd Deg Poly Std, File Count\n')
+            outfile.write('Video Name,Linear Permeability,3rd Deg Permeability,Linear Std,3rd Deg Poly Std,Contact Angle, File Count\n')
 
         # Process each group
         for group_name, file_list in sorted(grouped_files.items()):
@@ -58,21 +53,26 @@ def analyze(csv_path, opath):
                 df = pd.read_csv(csv_file)
                 linear = df.at[0, 'Permeability (avg DIB Rad)']
                 poly = df.at[0, 'Permeability (slope)']
+                linear = abs(linear)
+                poly = abs(poly)
                 linear_values.append(linear)
                 poly_values.append(poly)
-                outfile.write(f'{name}, {linear},{poly}\n')
+                CA = df['Contact Angle'].mean()
+                outfile.write(f'{name}, {linear},{poly},{""}, {""}, {CA}\n')
                 i+=1
                 
-           if len(file_list) > 1:
+            if len(file_list) > 1:
             # Calculate mean and standard deviation
                 linear_mean = np.mean(linear_values)
                 linear_std = np.std(linear_values, ddof= 1)
                 poly_mean = np.mean(poly_values)
                 poly_std = np.std(poly_values, ddof= 1)
-                file_count = len(file_list))
-            
-            outfile.write(f'{group_name},{linear_mean},{poly_mean},{linear_std},{poly_std},{file_count}\n')
-            if i == len(file_list):
+                file_count = len(file_list)
+                
+                outfile.write(f'{group_name},{linear_mean},{poly_mean},{linear_std},{poly_std},{CA},{file_count}\n')
+                if i == len(file_list):
+                    outfile.write(f'\n')
+            else:
                 outfile.write(f'\n')
 
 
@@ -83,6 +83,5 @@ def main(csv_path, opath):
 if __name__ == "__main__":
     csv_path = sys.argv[1]
     opath = sys.argv[2]
-
 
     main(csv_path, opath)
