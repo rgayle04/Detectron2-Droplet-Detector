@@ -46,6 +46,7 @@ def analyze(csv_path, opath):
             
             linear_values = []
             poly_values = []
+            CA_values = []
             i = 0
             for csv_file in file_list:
                 name = Path(csv_file).stem
@@ -58,6 +59,7 @@ def analyze(csv_path, opath):
                 linear_values.append(linear)
                 poly_values.append(poly)
                 CA = df['Contact Angle'].mean()
+                CA_values.append(CA)
                 outfile.write(f'{name}, {linear},{poly},{""}, {""}, {CA}\n')
                 i+=1
                 
@@ -67,9 +69,10 @@ def analyze(csv_path, opath):
                 linear_std = np.std(linear_values, ddof= 1)
                 poly_mean = np.mean(poly_values)
                 poly_std = np.std(poly_values, ddof= 1)
+                CA_mean = np.mean(CA_values)
                 file_count = len(file_list)
                 
-                outfile.write(f'{group_name},{linear_mean},{poly_mean},{linear_std},{poly_std},{CA},{file_count}\n')
+                outfile.write(f'{group_name},{linear_mean},{poly_mean},{linear_std},{poly_std},{CA_mean},{file_count}\n')
                 if i == len(file_list):
                     outfile.write(f'\n')
             else:
