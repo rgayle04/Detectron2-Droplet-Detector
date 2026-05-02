@@ -18,12 +18,13 @@ from detectron2.data import MetadataCatalog
 from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
-from utils import getBoundingSquare, processframe  
 
+from utils import getBoundingSquare, processframe  
 
 # ---------------- Detectron2 Setup ----------------
 
 cfg = get_cfg()
+
 cfg.OUTPUT_DIR = "./output/exp_droplets_r50"
 cfg.merge_from_file(model_zoo.get_config_file('./COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml')) #may need  to be changed for other users not fully sure 
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
@@ -32,7 +33,7 @@ cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
 cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 cfg.TEST.EVAL_PERIOD = 100
 predictor = DefaultPredictor(cfg)
-
+#print(cfg.dump())
 #tracker = DeepSort(max_age=30, n_init=3, max_iou_distance=0.7, max_cosine_distance=0.3)
 
 #droplet_history={}
@@ -95,6 +96,14 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
 
         if len(contours) == 0:
             continue
+
+        MIN_DROPLET_AREA = 250000  # adjust this value through trial and error
+        contour_area = cv2.contourArea(contours[0])
+
+        if contour_area < MIN_DROPLET_AREA:
+            continue  # skip this detection — too small to be a real droplet
+
+        print(f"Contour area: {contour_area}")
 
         cv2.drawContours(frame_drawn, contours, -1, (0, 255, 0), 2) #double checks the shape of droplets to ensure the measurements given are accurate 
         (cx, cy), cr = cv2.minEnclosingCircle(contours[0])
