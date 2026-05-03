@@ -8,7 +8,18 @@ import math
 
 g_pixelsPerUnit = 6.12
 
-
+'''
+circles = cv2.HoughCircles(
+    image,
+    cv2.HOUGH_GRADIENT,
+    dp=1,
+    minDist=100,      
+    param1=100,         
+    param2=70,       
+    minRadius=80,       
+    maxRadius=1000
+)
+'''
 def getModelInput(image, sidelength):
     mi = cv2.resize(image, dsize=(sidelength, sidelength))
     mi = np.asarray(mi)
@@ -23,60 +34,60 @@ def getModelInput(image, sidelength):
 # Total Volume, DIB Radius, Contact Angle, Radial Distance
 # Math from:
 # Droplet Shape Analysis and Permeability Studies in Droplet Lipid Bilayers by Sanhita S. Dixit et. al.
-def processframe(c1, c2):
-    rDistance = math.sqrt((c2[0]-c1[0])**2 + (c2[1]-c1[1])**2)
-
-    # Two unconnected droplets; do not record
-    if rDistance ** 2 >= (c1[2] + c2[2]) ** 2:
-        return
+def processframe(c1, c2=None):
+    """
+    Process one or two droplets.
     
-    #print([c1, c2])
-    
-    # convert from pixels to microns and compensate for top-down 
-    # perspective of microscope
-    r1 = float(c1[2]) / g_pixelsPerUnit
-    r2 = float(c2[2]) / g_pixelsPerUnit
-    lf = rDistance / g_pixelsPerUnit
-    lr = math.sqrt((r2-r1)**2. + lf**2.)
+    Parameters:
+    -----------
+    c1 : tuple
+        First circle (x, y, radius)
+    c2 : tuple, optional
+        Second circle (x, y, radius). If None, process single droplet.
+    """
+    try:
+        # Single droplet case
+        if c2 is None:
+            #print("Processing single droplet...")
+            r1 = float(c1[2]) / g_pixelsPerUnit
+            #print(f'{r1}')
+            v1 = (4. * math.pi * r1**3.) / 3.
+            #print(f'{v1}')
+            return ( r1, v1, None, None, v1, None, None, None)
+        
+        # Two droplets case (your original code)
+        rDistance = math.sqrt((c2[0]-c1[0])**2 + (c2[1]-c1[1])**2)
 
-    if lr == 0:
+        if rDistance ** 2 >= (c1[2] + c2[2]) ** 2:
+            return None  # Unconnected
+        
+        r1 = float(c1[2]) / g_pixelsPerUnit
+        r2 = float(c2[2]) / g_pixelsPerUnit
+        lf = rDistance / g_pixelsPerUnit
+        lr = math.sqrt((r2-r1)**2. + lf**2.)
+
+        thetab = math.acos((lr**2. - (r1**2. + r2**2.)) / (2. * r1 * r2))
+        rdib = (r1 * r2 * math.sin(thetab)) / lr
+        theta_degrees = (180. * thetab) / (2. * math.pi)
+
+        a = ((r1**2. - r2**2.) + lr**2.) / (2. * lr)
+        b = lr - a
+        c1h = r1 - a
+        c2h = r2 - b
+
+        v1 = (4. * math.pi * r1**3.) / 3.
+        v1 -= (math.pi * c1h * (3. * rdib**2. + c1h**2.)) / 6.
+
+        v2 = (4. * math.pi * r2**3.) / 3.
+        v2 -= (math.pi * c2h * (3. * rdib**2. + c2h**2.)) / 6.
+        tv = v1+v2
+
+        return (r1, v1, r2, v2, tv, rdib, theta_degrees, lr)
+        
+    except Exception as e:
+        print(f"Error in processframe: {e}")
         return None
-    
-    cos_theta=(lr**2 - (r1**2 + r2**2))/ (2 * r1 * r2)
 
-    cos_theta= max(-1.0,min(1.0, cos_theta))
-    thetab = math.acos(cos_theta)
-
-    rdib = (r1 * r2 * math.sin(thetab)) / lr
-    
-    if rdib == 0:
-        return None
-
-    # 1/2 of DIB angle is what chemists use
-    theta_degrees = (180. * thetab) / math.pi
-    theta_degrees /= 2.
-
-    if theta_degrees == 0:
-        return None
-
-
-    # dome heights for volume of sphere - dome
-    a = ((r1**2. - r2**2.) + lr**2.) / (2. * lr)
-    b = lr - a
-    c1h = r1 - a
-    c2h = r2 - b
-
-    v1 = (4. * math.pi * r1**3.) / 3.
-    v1 -= (math.pi * c1h * (3. * rdib**2. + c1h**2.)) / 6.
-
-    v2 = (4. * math.pi * r2**3.) / 3.
-    v2 -= (math.pi * c2h * (3. * rdib**2. + c2h**2.)) / 6.
-
-    tv = v1 + v2
-
-    #print([r1, v1, r2, v2, tv, rdib, theta_degrees, lr])
-    # input()
-    return r1, v1, r2, v2, tv, rdib, theta_degrees, lr
     
 def getBoundingSquare(bbox, h, w):
     (bbx1, bby1, bbx2, bby2) = bbox 
