@@ -14,9 +14,9 @@ def analyze(csv_path, opath):
     os.makedirs(opath, exist_ok=True)
 
     directories = opath.split("\\")
-    print(directories[3])
+    print(directories[-1])
 
-    output = os.path.join(opath, f"Summarized {directories[3]} .csv")
+    output = os.path.join(opath, f"Summarized {directories[-1]} .csv")
 
     csvFiles = []
     for ext in extensions:
