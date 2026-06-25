@@ -155,6 +155,11 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
 def process_video(video_path, output_dir, frameskip=1):
     # --- Video Setup ---
     cap = cv2.VideoCapture(video_path)
+    
+    if not cap.isOpened():
+        print(f"✗ ERROR: Cannot open video file: {video_path}")
+        return
+
     fps = cap.get(cv2.CAP_PROP_FPS)
     name = Path(video_path).stem
     frame_size = (800, 800)
@@ -168,52 +173,120 @@ def process_video(video_path, output_dir, frameskip=1):
     print(f"video out: {output_video_path}")
     print(f"csv out: {csv_path}\n")
 
-    vid = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 20, frame_size)
-    with open(csv_path, 'w') as outfile:
-        outfile.write("Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,"
-                      "Total Volume,DIB Radius,Contact Angle,Radial Distance\n")
+    try:
+        # Try XVID first
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        vid = cv2.VideoWriter(output_video_path, fourcc, fps, frame_size)
+        
+        # Verify VideoWriter opened successfully
+        if not vid.isOpened():
+            print("⚠️  XVID codec failed, trying MJPEG...")
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            vid = cv2.VideoWriter(output_video_path, fourcc, fps, frame_size)
+        
+        if not vid.isOpened():
+            print("⚠️  MJPEG failed, trying uncompressed...")
+            fourcc = -1  # Use default codec
+            vid = cv2.VideoWriter(output_video_path, fourcc, fps, frame_size)
+        
+        if not vid.isOpened():
+            raise RuntimeError("VideoWriter could not be initialized with any codec")
+            
+    except Exception as e:
+        print(f"✗ FATAL ERROR: Could not initialize video writer: {e}")
+        cap.release()
+        return
+    
+    # ===== Process frames =====
+    csv_written = False
+    
+    try:
+        with open(csv_path, 'w') as outfile:
+            outfile.write("Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,"
+                          "Total Volume,DIB Radius,Contact Angle,Radial Distance\n")
 
-        g_currentframe = 1
-        #while loop set to iterate through each frame till end of video
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+            g_currentframe = 1
+            frames_written = 0
+            frames_failed = 0
+            
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-            if g_currentframe % frameskip != 0:
+                if g_currentframe % frameskip != 0:
+                    g_currentframe += 1
+                    continue
+
+                try:
+                    outputs = predictor(frame)
+                    instances = outputs["instances"].to("cpu")
+
+                    frame = draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps)
+                    
+                    # Ensure frame is the correct size and format
+                    frame = cv2.resize(frame, frame_size)
+                    
+                    # Validate frame before writing
+                    if frame is None or frame.size == 0:
+                        print(f"⚠️  Frame {g_currentframe} is empty, skipping")
+                        frames_failed += 1
+                        g_currentframe += 1
+                        continue
+                    
+                    # Ensure frame is BGR uint8
+                    if frame.dtype != np.uint8:
+                        frame = np.uint8(frame)
+                    
+                    # Write frame with error handling
+                    if not vid.write(frame):
+                        print(f"⚠️  Warning: Failed to write frame {g_currentframe}")
+                        frames_failed += 1
+                    else:
+                        frames_written += 1
+
+                    cv2.imshow("RT Detection", frame)
+                    if cv2.waitKey(1) == 27:
+                        print("Interrupted by user.")
+                        break
+                        
+                except Exception as e:
+                    print(f"⚠️  Error processing frame {g_currentframe}: {e}")
+                    frames_failed += 1
+                    
                 g_currentframe += 1
-                continue
-
-            outputs = predictor(frame)
-            instances = outputs["instances"].to("cpu")
-
-            frame = draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps)
-            frame = cv2.resize(frame, frame_size)
-            vid.write(frame)
-
-            cv2.imshow("RT Detection", frame)
-            if cv2.waitKey(1) == 27:
-                print("Interrupted by user.")
-                break
-            g_currentframe += 1
+            
+            csv_written = True
+            print(f"Frames written: {frames_written}, Failed: {frames_failed}")
+    
+    except Exception as e:
+        print(f"✗ ERROR during video processing: {e}")
+    
+    finally:
+        cap.release()
+        vid.release()  # CRITICAL: Always release
+        cv2.destroyAllWindows()
+    
+    # ===== CSV Processing =====
+    if not csv_written:
+        print("✗ No CSV data written. Skipping permeability analysis.")
+        return
     
     df = pd.read_csv(csv_path)
 
     if df.empty:
+        print("No data collected from video.")
         return
+    
     has2Droplets = df['DIB Radius'].notna().any()
 
     if not has2Droplets:
         print("Single droplet detected throughout video. Skipping permeability analysis.\n")
-        #print("Basic measurements saved to CSV.\n")
-        cap.release()
-        vid.release()
-        cv2.destroyAllWindows()
         return
     else:
         print("Two Droplets detected. Performing Permeability Analysis: ")
 
-        std = np.std(df['DIB Radius'], ddof= 1)
+        std = np.std(df['DIB Radius'], ddof=1)
         print('DIB Radius Standard Deviation:', std)
         mean = df['DIB Radius'].mean()
         print('DIB Radius Mean:', mean)
@@ -223,54 +296,62 @@ def process_video(video_path, output_dir, frameskip=1):
         
         lL = mean - (std*3)
         print(f'Lower Limit: {lL}')
-        #df = df[df['DIB Radius'].notna()]
 
-        df.dropna(subset=['DIB Radius'], inplace=True)  # Remove NaN rows first
+        df.dropna(subset=['DIB Radius'], inplace=True)
 
         outliers = np.where((df['DIB Radius'] > uL) | (df['DIB Radius'] < lL))
         print(f'Rows before Cleaning: {len(df)}')
         print(f'Number of Outliers: {len(outliers[0])}')
 
-        if len(outliers[0]) < len(df) * 0.5:  # Don't remove more than 50%
+        if len(outliers[0]) < len(df) * 0.5:
             df.drop(outliers[0], axis=0, inplace=True)
-            df.reset_index(drop=True, inplace=True)  # Reset index after dropping
+            df.reset_index(drop=True, inplace=True)
             print(f'Rows remaining: {len(df)}')
         else:
             print("Too many outliers detected - skipping removal")
-        split_name = name.split(" ")
         
-        sp_name = split_name[-1]
+        # ===== EXTRACT osmP WITH ERROR HANDLING =====
+        try:
+            split_name = name.split(" ")
+            sp_name = split_name[-1]
 
-        osmP = ""
+            osmP = ""
 
-        for i in range(3):
-            if len(osmP)<3:
-                osmP+=sp_name[i]
-        #print(int(osmP))
+            for i in range(3):
+                if len(osmP) < 3:
+                    osmP += sp_name[i]
+
+            osmP = float(osmP) / 1000
+            print(f"Osmolarity extracted: {osmP} mol/L")
+
+        except (ValueError, IndexError) as e:
+            print(f"✗ ERROR: Could not extract valid osmolarity from filename: {name}")
+            print(f"  Expected format with 3-digit number in filename (e.g., '...170mOsm...')")
+            print(f"  Skipping this video.\n")
+            cap.release()
+            vid.release()
+            cv2.destroyAllWindows()
+            return
         
-        osmP = float(osmP)/1000
-
+        # ===== REST OF PROCESSING =====
         df['Org. Concentr'] = None
-
         df.at[0, 'Org. Concentr'] = osmP
 
-        df['Adjusted Time'] = (df['Time Stamp']-df.loc[0, 'Time Stamp'])
+        df['Adjusted Time'] = (df['Time Stamp'] - df.loc[0, 'Time Stamp'])
 
-        df['DIB Area'] =  math.pi*(df['DIB Radius']**2)
+        df['DIB Area'] = math.pi * (df['DIB Radius']**2)
         
         av = df.loc[0, 'Droplet 1 Volume']
         
-        df['(V/V0)^2']= (df['Droplet 1 Volume']/av)**2
+        df['(V/V0)^2'] = (df['Droplet 1 Volume'] / av)**2
 
         df['Linear Permebility Section:'] = None 
 
         df['Init Radius'] = None
-        df.at[0, 'Init Radius'] = (df.loc[0,'Droplet 1 Radius']/10000)
-
-        #f = (df.loc[1,'Droplet 1 Radius']/10000) 
+        df.at[0, 'Init Radius'] = (df.loc[0, 'Droplet 1 Radius'] / 10000)
 
         df['Init Vol'] = None
-        df.at[0, 'Init Vol'] = (4/3)*3.1415*(df.loc[0,'Init Radius']**3)
+        df.at[0, 'Init Vol'] = (4/3) * 3.1415 * (df.loc[0, 'Init Radius']**3)
 
         df['Linearized DIB Radius'] = None
         slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['DIB Radius'])
@@ -278,49 +359,34 @@ def process_video(video_path, output_dir, frameskip=1):
         df.at[0, 'Linearized DIB Radius'] = intercept
 
         df['DIB Radius(cm)'] = None
-        df.at[0, 'DIB Radius(cm)'] = intercept/10000
+        df.at[0, 'DIB Radius(cm)'] = intercept / 10000
 
         df['DIB Area(cm^2)'] = None
-        df.at[0, 'DIB Area(cm^2)'] = math.pi*(df.loc[0,'DIB Radius(cm)']**2)
+        df.at[0, 'DIB Area(cm^2)'] = math.pi * (df.loc[0, 'DIB Radius(cm)']**2)
 
         slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['(V/V0)^2'])
         
         summary_cols = {
-        'slope (V/V0)^2': slope,
-        'r^2': intercept,
-        'Permeability (avg DIB Rad)': ((slope/2) * df.loc[0, 'DIB Radius(cm)']) / (df.loc[0, 'DIB Area(cm^2)'] * 0.018 * df.loc[0, 'Org. Concentr']) * 2,
-        '3rd Degree Polynomial Section:': None
+            'slope (V/V0)^2': slope,
+            'r^2': intercept,
+            'Permeability (avg DIB Rad)': ((slope/2) * df.loc[0, 'DIB Radius(cm)']) / (df.loc[0, 'DIB Area(cm^2)'] * 0.018 * df.loc[0, 'Org. Concentr']) * 2,
+            '3rd Degree Polynomial Section:': None
         }
 
-        # Only set these at row 0
         for col, val in summary_cols.items():
             if col not in df.columns:
-                df[col] = np.nan  # Use NaN instead of None
+                df[col] = np.nan
             df.at[0, col] = val
 
         x = df['Adjusted Time'].dropna().values
-
         y = df['DIB Area'].dropna().values
 
         min_len = min(len(x), len(y))
-
         x = x[:min_len]
         y = y[:min_len]
 
-        coeffs = P.polyfit(x,y,3)
+        coeffs = P.polyfit(x, y, 3)
 
-
-        #X = np.column_stack([x**1, x**2, x**3])
-
-        #X_with_intercept = np.column_stack([np.ones(len(x)), X])
-
-        #coefficients = np.linalg.lstsq(X_with_intercept, y, rcond=None)[0]
-
-        
-#        coefficients = np.polyfit(x,y,3)
-#        a3, a2, a1, a0 = coefficients
-
-        #a = coefficients.tolist() 
         df['A'] = None
         df.at[0, 'A'] = coeffs[3]
         df['B'] = None
@@ -329,22 +395,17 @@ def process_video(video_path, output_dir, frameskip=1):
         df.at[0, 'C'] = coeffs[1]
         df['D'] = None
         df.at[0, 'D'] = coeffs[0] 
-        df['Eval']=((0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'A']*df['Adjusted Time']**4)/(2*df.loc[0, 'Droplet 1 Volume'])+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'B']*df['Adjusted Time']**3)/(3*df.loc[0,'Droplet 1 Volume'])+(0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'C']*df['Adjusted Time']**2)/df.loc[0,'Droplet 1 Volume']+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'D']*df['Adjusted Time'])/df.loc[0,'Droplet 1 Volume'])
+        
+        df['Eval'] = ((0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'A']*df['Adjusted Time']**4)/(2*df.loc[0, 'Droplet 1 Volume'])+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'B']*df['Adjusted Time']**3)/(3*df.loc[0,'Droplet 1 Volume'])+(0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'C']*df['Adjusted Time']**2)/df.loc[0,'Droplet 1 Volume']+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'D']*df['Adjusted Time'])/df.loc[0,'Droplet 1 Volume'])
 
-        
-        #df.at[0, 'Permeability'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*(df.loc[0, 'Org. Concentr']))
-
-        
-        #slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
-        
         x = df['Eval'].values
         y = df['(V/V0)^2'].values
         mask = ~np.isnan(x) & ~np.isnan(y)
         x = x[mask]
         y = y[mask]
         
-        slope, intercept = np.polyfit(x,y,1)
-        df['Permeability (slope)']= None
+        slope, intercept = np.polyfit(x, y, 1)
+        df['Permeability (slope)'] = None
         df.at[0, 'Permeability (slope)'] = slope
 
         df['Permeability (intercept)'] = None
@@ -352,7 +413,6 @@ def process_video(video_path, output_dir, frameskip=1):
 
         df.to_csv(csv_path, index=False)
         
-
     cap.release()
     vid.release()
     cv2.destroyAllWindows()
