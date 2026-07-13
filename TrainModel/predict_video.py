@@ -9,6 +9,7 @@ import numpy as np
 import sys
 import scipy.stats as stats
 import torch
+import gc
 from pathlib import Path
 from sklearn.linear_model import LinearRegression 
 from detectron2.utils.visualizer import ColorMode
@@ -103,7 +104,7 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
         if contour_area < MIN_DROPLET_AREA:
             continue  # skip this detection — too small to be a real droplet
 
-        print(f"Contour area: {contour_area}")
+        #print(f"Contour area: {contour_area}")
 
         cv2.drawContours(frame_drawn, contours, -1, (0, 255, 0), 2) #double checks the shape of droplets to ensure the measurements given are accurate 
         (cx, cy), cr = cv2.minEnclosingCircle(contours[0])
@@ -153,6 +154,12 @@ def draw_fixed_color_instances(frame, instances, outfile, g_currentframe, fps):
 
 
 def process_video(video_path, output_dir, frameskip=1):
+    
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated(0) / 1e9
+        reserved  = torch.cuda.memory_reserved(0) / 1e9
+        print(f"  VRAM before starting: {allocated:.2f}GB allocated / {reserved:.2f}GB reserved")
+
     # --- Video Setup ---
     cap = cv2.VideoCapture(video_path)
     
@@ -416,6 +423,10 @@ def process_video(video_path, output_dir, frameskip=1):
     cap.release()
     vid.release()
     cv2.destroyAllWindows()
+
+    
+    gc.collect()
+    torch.cuda.empty_cache()
     print(f"[DONE] {name} processed.\n")
 
 
